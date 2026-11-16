@@ -71,8 +71,13 @@ def track(env: np.ndarray, bpm: float, tightness: float = 100) -> np.ndarray:
 
 
 def analyze(path: Path, cache: Path) -> dict:
+    source = path.resolve()
+    stat = source.stat()
     if cache.exists():
-        return read_json(cache)
+        cached = read_json(cache)
+        if (cached.get("source") == str(source) and cached.get("source_size") == stat.st_size
+                and cached.get("source_mtime_ns") == stat.st_mtime_ns):
+            return cached
     y = load_audio(path)
     env = onset_envelope(y)
     bpm = tempo(env)
@@ -84,7 +89,8 @@ def analyze(path: Path, cache: Path) -> dict:
             for b in beats]
     strength = [float(env[max(0, int(b * fps) - 2): int(b * fps) + 3].max()) if int(b * fps) < len(env) else 0
                 for b in beats]
-    out = {"duration": len(y) / SR, "bpm": bpm, "beats": [round(float(b), 3) for b in beats],
+    out = {"source": str(source), "source_size": stat.st_size, "source_mtime_ns": stat.st_mtime_ns,
+           "duration": len(y) / SR, "bpm": bpm, "beats": [round(float(b), 3) for b in beats],
            "loud": loud, "strength": strength}
     write_json(cache, out)
     log(f"beats: {bpm:.0f} bpm, {len(beats)} beats over {out['duration']:.0f}s")
